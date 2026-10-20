@@ -1,5 +1,5 @@
 /**
- * ChatPage — embeds `hermes --tui` inside the dashboard.
+ * TuiPage — embeds `hermes --tui` inside the dashboard.
  *
  *   <div host> (dashboard chrome)                                         .
  *     └─ <div wrapper> (rounded, dark bg, padded — the "terminal window"  .
@@ -124,7 +124,7 @@ import { SGR_MOUSE_RE } from "@/lib/pty-mouse-report";
 // second tab — including a Chrome "Duplicate tab" — gets its own PTY instead of
 // taking over this one. See #115304.
 
-export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
+export default function TuiPage({ isActive = true }: { isActive?: boolean }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termWrapRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -141,15 +141,15 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const syncMetricsRef = useRef<(() => void) | null>(null);
   // NS-434 follow-up: the keyboard-inset sync + reset closures from the main
   // PTY effect, exposed to the visibility-gated listener effect below.
-  // ChatPage stays mounted (hidden) on every dashboard route, so the
-  // visualViewport listeners must only be attached while /chat is the active
+  // TuiPage stays mounted (hidden) on every dashboard route, so the
+  // visualViewport listeners must only be attached while /tui is the active
   // tab — otherwise the scroll pin fires when a soft keyboard opens on
   // Settings etc. and fights iOS's own focus-scroll behavior there.
   const keyboardInsetSyncRef = useRef<(() => void) | null>(null);
   const keyboardInsetResetRef = useRef<(() => void) | null>(null);
   // Sticky activation latch: the PTY-connect effect below must not open
   // `/api/pty` until the chat tab has actually been active at least once.
-  // The dashboard mounts ChatPage persistently (hidden) on every route, so
+  // The dashboard mounts TuiPage persistently (hidden) on every route, so
   // without this gate merely loading /sessions, /system, etc. would spawn the
   // TUI/agent bootstrap (`Installing TUI dependencies…`). Latching keeps the
   // PTY alive across later tab switches (the persistence UX) — once true it
@@ -267,7 +267,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     setReconnectNonce((n) => n + 1);
   }, [clearReconnectTimer, searchParams, setSearchParams]);
   // Clear mobile-input tracking refs when the tab is hidden so stale state
-  // from a previous /chat visit doesn't cause the mobile-replacement logic
+  // from a previous /tui visit doesn't cause the mobile-replacement logic
   // to misfire on the next activation (#106403: repeated last character).
   useEffect(() => {
     if (!isActive) {
@@ -281,7 +281,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // what side-effects (body-scroll lock, keydown listener, portal render)
   // key on — that way switching to another tab triggers the effect's
   // cleanup, releasing the scroll-lock on /sessions etc.  Returning to
-  // /chat re-runs the effect (derived flips back to true) and re-locks.
+  // /tui re-runs the effect (derived flips back to true) and re-locks.
   // Keying on the raw state would leak the body.overflow="hidden" across
   // tabs because the dep wouldn't change on tab switch.
   const [mobilePanelOpenRaw, setMobilePanelOpenRaw] = useState(false);
@@ -321,13 +321,11 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     () => buildTerminalTheme(terminalBg, terminalFg),
     [terminalBg, terminalFg],
   );
-  // The dashboard keeps ChatPage mounted persistently so the PTY survives tab
-  // switches. That is great for ordinary /chat navigation, but it means query
-  // param changes do NOT remount the component. Resume-in-chat from the
-  // Sessions page relies on `/chat?resume=<id>` changing at runtime, so we must
-  // treat the current resume target as part of the PTY identity and rebuild the
-  // terminal session when it changes.
-  const resumeParam = searchParams.get("resume");
+  // A hidden persistent terminal must ignore another surface's resume query.
+  const requestedResume = searchParams.get("resume");
+  const [lastResume, setLastResume] = useState(requestedResume);
+  if (isActive && lastResume !== requestedResume) setLastResume(requestedResume);
+  const resumeParam = isActive ? requestedResume : lastResume;
   // Profile-scoped chat: spawn the PTY under the globally selected
   // management profile. Changing it remounts the terminal (key below /
   // effect dep) so the user explicitly starts a fresh scoped session.
@@ -458,7 +456,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     // effect has already filled the slot, so even a "defensive"
     // setEnd(null) here wipes that page's header buttons (Cron "Create",
     // Profiles "Build", …). Ownership rule: only write to the slot while
-    // /chat is the active route AND the narrow layout needs the button;
+    // /tui is the active route AND the narrow layout needs the button;
     // the effect cleanup handles removal on every transition out.
     if (!isActive || !narrow) return;
     setEnd(
@@ -495,8 +493,8 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   useEffect(() => {
     // Don't spawn the chat PTY (and the TUI/agent bootstrap it triggers)
     // until the chat tab has been activated. Prevents the persistently
-    // mounted, hidden ChatPage from opening `/api/pty` on every dashboard
-    // page. Sticky, so switching away from /chat keeps the PTY alive.
+    // mounted, hidden TuiPage from opening `/api/pty` on every dashboard
+    // page. Sticky, so switching away from /tui keeps the PTY alive.
     if (!hasActivated) return;
 
     const host = hostRef.current;
@@ -1019,7 +1017,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
 
     window.addEventListener("resize", scheduleSyncTerminalMetrics);
     // The visualViewport listeners that drive `onViewportChange` are NOT
-    // attached here: ChatPage is persistently mounted (hidden) on every
+    // attached here: TuiPage is persistently mounted (hidden) on every
     // dashboard route, so they are attached/detached by the isActive-gated
     // effect below via these refs. Attaching them unconditionally made the
     // scroll pin fire when a soft keyboard opened on any page.
@@ -1145,7 +1143,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     // `code` is null when the attempt died before any socket existed — the
     // banner then omits the "(code N)" suffix rather than inventing one.
     const scheduleReconnect = (code: number | null) => {
-      // ChatPage remains mounted behind other dashboard routes. Do not churn
+      // TuiPage remains mounted behind other dashboard routes. Do not churn
       // through reconnect attempts while it is inactive or the document is
       // hidden; the page-resume listener starts one when the user returns.
       if (
@@ -1610,7 +1608,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   ]);
 
   // NS-434 follow-up: attach the visualViewport keyboard-inset listeners
-  // ONLY while the chat tab is actually visible. ChatPage stays mounted
+  // ONLY while the chat tab is actually visible. TuiPage stays mounted
   // (display:none) on every other dashboard route, so unconditional
   // listeners made the composer reveal (`window.scrollBy`) fire whenever a
   // soft keyboard opened on Settings/Sessions/etc., fighting iOS Safari's
@@ -1646,7 +1644,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // after two animation frames so layout has committed.
   //
   // Focus handling: we only steal focus back into the terminal when
-  // nothing else inside ChatPage was holding it (typically the first
+  // nothing else inside TuiPage was holding it (typically the first
   // activation after mount, where document.activeElement is <body>; or
   // a return after the user had been typing in the terminal, where
   // focus was already on the xterm textarea before the tab got hidden

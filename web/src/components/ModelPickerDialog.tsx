@@ -81,6 +81,8 @@ interface Props {
   title?: string;
   /** If true, hides "Persist globally" checkbox — always saves to config.yaml. */
   alwaysGlobal?: boolean;
+  /** GUI adapter: no profile config persistence control. */
+  sessionOnly?: boolean;
   /**
    * Current assignment for this picker *slot* (auxiliary task, MoA model).
    * The options loader always returns the main chat model; without this,
@@ -99,6 +101,7 @@ export function ModelPickerDialog(props: Props) {
     onClose,
     title = "Switch Model",
     alwaysGlobal = false,
+    sessionOnly = false,
     currentAssignment,
   } = props;
   const standalone = !!loader && !!onApply;
@@ -435,7 +438,7 @@ export function ModelPickerDialog(props: Props) {
         </div>
 
         <footer className="border-t border-border p-3 flex items-center justify-between gap-3 flex-wrap">
-          {alwaysGlobal ? (
+          {sessionOnly ? <span className="text-xs text-muted-foreground">This conversation only</span> : alwaysGlobal ? (
             <span className="text-xs text-muted-foreground">
               Saves to config.yaml — applies to new sessions.
             </span>

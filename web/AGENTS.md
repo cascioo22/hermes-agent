@@ -4,6 +4,16 @@ Applies on top of the root `AGENTS.md`. Backend routers: `hermes_cli/web_routers
 dashboard surface, mounted by `hermes_cli/web_server.py` (+ `web_server_*.py` siblings). Frontend:
 `web/src/`. Shared JSON-RPC/WS client: `apps/shared` (`@hermes/shared`), also used by the desktop.
 
+## Fork-specific GUI exception (user-approved)
+
+This fork deliberately adds a browser-native GUI at `/chat` and preserves the real terminal
+at `/tui`. The TUI-only restriction below applies to the preserved terminal, not this new
+user-approved GUI surface. Keep the existing LEFT dashboard shell and RIGHT model/reasoning/
+workspace/conversation rail; reuse their actual components, adapting action bindings rather
+than cloning controls. The new GUI uses the existing authenticated JSON-RPC transport and
+Python session/tool/approval behavior. It must never bypass approval policy or alter agent
+prompt caching. GUI safety and reconnect limitations must be explicit until verified.
+
 ## The dashboard embeds the REAL `hermes --tui` — not a rewrite
 
 `hermes_cli/pty_bridge.py` + the `@app.websocket("/api/pty")` endpoint in `web_server.py`:

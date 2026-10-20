@@ -1,0 +1,12 @@
+.gui-chat-reading, .gui-chat-composer { width: min(100%, 52rem); margin-inline: auto; }
+.gui-chat-reading { padding: .75rem .5rem 1.5rem; overflow-wrap: anywhere; }
+.gui-chat-message { min-width: 0; }
+.gui-chat-message > div:not(:first-child) { font-size: 1rem; line-height: 1.65; }
+.gui-chat-user { margin-left: 12%; padding: 1rem; border: 1px solid var(--border); background: var(--secondary); }
+.gui-chat details summary { cursor: pointer; padding-block: .4rem; }
+.gui-chat details[open] > :not(summary) { margin-top: .5rem; }
+.gui-chat-composer { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
+.gui-chat-composer textarea { display: block; width: 100%; resize: vertical; min-height: 5rem; max-height: 14rem; padding: .75rem; border: 1px solid var(--border); background: var(--background-base); color: inherit; font: inherit; }
+.gui-chat :is(button, textarea, input, summary):focus-visible { outline: 2px solid var(--midground, currentColor); outline-offset: 2px; }
+@media(max-width: 1023px) { .gui-chat button { min-height: 2.75rem; } .gui-chat-user { margin-left: 5%; } }
+@media(prefers-reduced-motion: reduce) { .gui-chat * { animation: none !important; scroll-behavior: auto !important; } }

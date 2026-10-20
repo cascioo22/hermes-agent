@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 /**
  * Lightweight markdown renderer for LLM output.
@@ -13,10 +13,12 @@ export function Markdown({
   content,
   highlightTerms,
   streaming,
+  copyCode = false,
 }: {
   content: string;
   highlightTerms?: string[];
   streaming?: boolean;
+  copyCode?: boolean;
 }) {
   const blocks = useMemo(() => parseBlocks(content), [content]);
   const caret = streaming ? <StreamingCaret /> : null;
@@ -27,6 +29,7 @@ export function Markdown({
         <Block
           key={i}
           block={block}
+          copyCode={copyCode}
           highlightTerms={highlightTerms}
           caret={caret && i === blocks.length - 1 ? caret : null}
         />
@@ -34,6 +37,13 @@ export function Markdown({
       {blocks.length === 0 && caret}
     </div>
   );
+}
+
+function CodeCopy({content}: {content: string}) {
+  const [status, setStatus] = useState('Copy code');
+  return <button type="button" className="text-xs text-text-secondary hover:text-foreground py-1" onClick={() => {
+    void navigator.clipboard.writeText(content).then(() => setStatus('Copied')).catch(() => setStatus('Copy failed — select the code manually'));
+  }}>{status}</button>;
 }
 
 function StreamingCaret() {
@@ -160,21 +170,19 @@ function Block({
   block,
   highlightTerms,
   caret,
+  copyCode,
 }: {
   block: BlockNode;
   highlightTerms?: string[];
   caret?: ReactNode;
+  copyCode?: boolean;
 }) {
   switch (block.type) {
     case "code":
-      return (
-        <pre className="bg-secondary/60 border border-border px-3 py-2.5 text-xs font-mono leading-relaxed overflow-x-auto">
-          <code>
-            {block.content}
-            {caret}
-          </code>
-        </pre>
-      );
+      return <div className="min-w-0">
+        {copyCode && <CodeCopy content={block.content} />}
+        <pre className="bg-secondary/60 border border-border px-3 py-2.5 text-xs font-mono leading-relaxed overflow-x-auto"><code>{block.content}{caret}</code></pre>
+      </div>;
 
     case "heading": {
       const Tag = `h${Math.min(block.level, 4)}` as "h1" | "h2" | "h3" | "h4";

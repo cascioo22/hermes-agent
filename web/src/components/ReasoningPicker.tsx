@@ -43,7 +43,31 @@ interface ReasoningPickerProps {
   onChanged?: (effort: string) => void;
 }
 
-export function ReasoningPicker({
+interface SessionReasoning {
+  effort: string;
+  disabled?: boolean;
+  onChange: (effort: string) => Promise<void>;
+}
+
+export function ReasoningPicker(props: ReasoningPickerProps & {session?: SessionReasoning}) {
+  return props.session ? <SessionReasoningPicker session={props.session} /> : <ProfileReasoningPicker {...props} />;
+}
+
+function SessionReasoningPicker({session}: {session: SessionReasoning}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // The gateway currently reports support + effective effort, not a per-model
+  // option inventory. Do not invent universal Low/High/Off capabilities.
+  const options = [{value: 'default', label: 'Default'}];
+  if (session.effort && session.effort !== 'default') options.push({value: session.effort, label: `${session.effort} (current)`});
+  return <><ReasoningControl effort={session.effort || 'default'} disabled={session.disabled || saving} options={options} onSelect={next => {
+    if (next !== 'default') return;
+    setSaving(true); setError(null);
+    void session.onChange(next).catch(e => setError(e instanceof Error ? e.message : 'Reasoning change failed')).finally(() => setSaving(false));
+  }} /><p className="px-3 pb-2 text-xs text-text-tertiary">Custom effort options are unavailable without model capability metadata.</p>{error && <p role="alert">{error}</p>}</>;
+}
+
+function ProfileReasoningPicker({
   currentModel,
   profile,
   refreshKey = 0,
@@ -94,6 +118,10 @@ export function ReasoningPicker({
     [effort, onChanged, profile],
   );
 
+  return <ReasoningControl effort={effort} disabled={!loaded || saving} options={EFFORT_OPTIONS} onSelect={onSelect} />;
+}
+
+function ReasoningControl({effort, disabled, options, onSelect}: {effort:string;disabled?:boolean;options:readonly {value:string;label:string}[];onSelect:(value:string)=>void}) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 text-xs">
       <div className="flex items-center gap-1.5 text-text-tertiary">
@@ -102,11 +130,11 @@ export function ReasoningPicker({
       </div>
       <Select
         className="ml-auto min-w-0"
-        disabled={!loaded || saving}
+        disabled={disabled}
         onValueChange={onSelect}
         value={effort}
       >
-        {EFFORT_OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <SelectOption key={opt.value} value={opt.value}>
             {opt.label}
           </SelectOption>

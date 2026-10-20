@@ -131,7 +131,44 @@ export function sidecarSessionCreateParams(profile?: string): Record<string, unk
   }
 }
 
-export function ChatSidebar({
+export interface ChatSessionControls {
+  gateway: GatewayClient
+  sessionId: string | null
+  model: string
+  provider: string
+  reasoningEffort: string
+  supportsReasoning: boolean
+  busy: boolean
+  connectionState: ConnectionState
+  setModel: (args: { provider: string; model: string; confirmExpensiveModel?: boolean }) => Promise<{ confirm_required?: boolean; confirm_message?: string; warning?: string } | void>
+  setReasoning: (effort: string) => Promise<void>
+}
+
+export function ChatSidebar(props: ChatSidebarProps | { session: ChatSessionControls; className?: string }) {
+  return 'session' in props ? <GuiSessionSidebar session={props.session} className={props.className} /> : <TuiChatSidebar {...props} />
+}
+
+function GuiSessionSidebar({ session, className }: { session: ChatSessionControls; className?: string }) {
+  const [modelOpen, setModelOpen] = useState(false)
+  return <aside className={cn('flex flex-col gap-3 min-w-0', className)}>
+    <ModelControl modelName={session.model || '—'} state={session.connectionState} disabled={session.busy || !session.sessionId} onOpen={() => setModelOpen(true)} />
+    {session.supportsReasoning && <Card className="py-0"><ReasoningPicker currentModel={session.model} session={{ effort: session.reasoningEffort, disabled: session.busy || !session.sessionId, onChange: session.setReasoning }} /></Card>}
+    <p className="px-3 text-xs text-text-tertiary">Settings apply to this conversation only.</p>
+    {modelOpen && <ModelPickerDialog sessionOnly currentAssignment={{model: session.model, provider: session.provider}} loader={options => session.gateway.request('model.options', {session_id: session.sessionId, ...(options?.refresh ? {refresh: true} : {})})} onApply={session.setModel} onClose={() => setModelOpen(false)} />}
+  </aside>
+}
+
+function ModelControl({ modelName, state, disabled, onOpen }: { modelName: string; state: ConnectionState; disabled?: boolean; onOpen: () => void }) {
+  const modelLabel = modelName.split('/').slice(-1)[0] ?? '—'
+  return <Card className="flex items-center justify-between gap-2 px-3 py-2">
+    <div className="min-w-0 flex-1"><div className="text-display text-xs tracking-wider text-text-tertiary">model</div>
+      <Button ghost size="sm" disabled={disabled} onClick={onOpen} className="max-w-full min-w-0 px-0 py-0 self-start normal-case tracking-normal text-sm font-medium hover:underline disabled:no-underline" title={modelName === '—' ? 'switch model' : modelName}>
+        <span className="flex min-w-0 max-w-full items-center gap-1"><span className="truncate">{modelLabel}</span><ChevronDown className="size-3.5 shrink-0 text-text-secondary" /></span>
+      </Button></div><Badge tone={STATE_TONE[state]} className="shrink-0">{STATE_LABEL[state]}</Badge>
+  </Card>
+}
+
+function TuiChatSidebar({
   channel,
   profile,
   className,
@@ -535,7 +572,6 @@ export function ChatSidebar({
   // the fallback until the PTY has broadcast a runtime identity (fresh chat,
   // events feed still connecting).
   const modelName = runtimeModel || effectiveModel || info.model || '—'
-  const modelLabel = modelName.split('/').slice(-1)[0] ?? '—'
   const credential = credentialWarning(info.credential_warning)
   const banner = error ?? credential?.message ?? null
   const showReload = isEventsAuthRejectionMessage(error)
@@ -547,33 +583,7 @@ export function ChatSidebar({
         className
       )}
     >
-      <Card className="flex items-center justify-between gap-2 px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-display text-xs tracking-wider text-text-tertiary">model</div>
-
-          <Button
-            ghost
-            size="sm"
-            onClick={() => setModelOpen(true)}
-            className={cn(
-              'max-w-full min-w-0 px-0 py-0',
-              'self-start normal-case tracking-normal text-sm font-medium',
-              'hover:underline disabled:no-underline'
-            )}
-            title={modelName === '—' ? 'switch model' : modelName}
-          >
-            <span className="flex min-w-0 max-w-full items-center gap-1">
-              <span className="truncate">{modelLabel}</span>
-
-              <ChevronDown className="size-3.5 shrink-0 text-text-secondary" />
-            </span>
-          </Button>
-        </div>
-
-        <Badge tone={STATE_TONE[state]} className="shrink-0">
-          {STATE_LABEL[state]}
-        </Badge>
-      </Card>
+      <ModelControl modelName={modelName} state={state} onOpen={() => setModelOpen(true)} />
 
       {supportsReasoning && (
         <Card className="py-0">

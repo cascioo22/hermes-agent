@@ -96,7 +96,8 @@ const PairingPage = lazy(() => import("@/pages/PairingPage"));
 const ChannelsPage = lazy(() => import("@/pages/ChannelsPage"));
 const WebhooksPage = lazy(() => import("@/pages/WebhooksPage"));
 const SystemPage = lazy(() => import("@/pages/SystemPage"));
-const ChatPage = lazy(() => import("@/pages/ChatPage"));
+const TuiPage = lazy(() => import("@/pages/TuiPage"));
+const GuiChatPage = lazy(() => import("@/pages/GuiChatPage"));
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useI18n } from "@/i18n";
@@ -137,22 +138,23 @@ function UnknownRouteFallback({ pluginsLoading }: { pluginsLoading: boolean }) {
   return <Navigate to="/sessions" replace />;
 }
 
-const CHAT_NAV_ITEM: NavItem = {
-  path: "/chat",
-  labelKey: "chat",
-  label: "Chat",
+const CHAT_NAV_ITEM: NavItem = { path: "/chat", labelKey: "chat", label: "Chat", icon: MessageSquare };
+
+const TUI_NAV_ITEM: NavItem = {
+  path: "/tui",
+  label: "TUI",
   icon: Terminal,
 };
 
 /**
- * Built-in routes except /chat.  Chat is rendered persistently (outside
+ * Built-in routes except /tui.  Chat is rendered persistently (outside
  * <Routes>) when embedded — see the persistent chat host block rendered
  * inline near the bottom of this file — so the PTY child, WebSocket,
  * and xterm instance survive when the user visits another tab and comes
  * back.  A `display:none` toggle hides the terminal without unmounting.
- * The host itself is still deferred until the first /chat visit so the
+ * The host itself is still deferred until the first /tui visit so the
  * xterm chunk is not downloaded on unrelated pages.  Routing still owns
- * the URL so /chat deep-links, browser back/forward, and nav highlight
+ * the URL so /tui deep-links, browser back/forward, and nav highlight
  * keep working.
  */
 const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
@@ -177,10 +179,10 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/docs": DocsPage,
 };
 
-// Route placeholder for /chat.  The persistent ChatPage host (rendered
+// Route placeholder for /tui.  The persistent TuiPage host (rendered
 // outside <Routes> when embedded chat is on) paints on top; this empty
 // element just claims the path so the `*` catch-all redirect doesn't
-// fire when the user navigates to /chat.
+// fire when the user navigates to /tui.
 function ChatRouteSink() {
   return null;
 }
@@ -402,15 +404,22 @@ export default function App() {
   const sidebarStatus = useSidebarStatus();
   const isDocsRoute = pathname === "/docs" || pathname === "/docs/";
   const normalizedPath = pathname.replace(/\/$/, "") || "/";
+  const isTuiRoute = normalizedPath === "/tui";
   const isChatRoute = normalizedPath === "/chat";
+  const isConversationRoute = isTuiRoute || isChatRoute;
+  const [guiHostMounted, setGuiHostMounted] = useState(isChatRoute);
+  useEffect(() => {
+    setGuiHostMounted(previous => latchChatActivation(previous, isChatRoute));
+  }, [isChatRoute]);
+  const guiOverriddenByPlugin = manifests.some(m => m.tab.override === "/chat");
   const embeddedChat = isDashboardEmbeddedChatEnabled();
   // Defer mounting the persistent chat host (and its xterm chunk) until the
-  // user has actually opened /chat at least once. Sticky after that so the
+  // user has actually opened /tui at least once. Sticky after that so the
   // PTY survives later tab switches.
-  const [chatHostMounted, setChatHostMounted] = useState(isChatRoute);
+  const [tuiHostMounted, setTuiHostMounted] = useState(isTuiRoute);
   useEffect(() => {
-    setChatHostMounted((prev) => latchChatActivation(prev, isChatRoute));
-  }, [isChatRoute]);
+    setTuiHostMounted((prev) => latchChatActivation(prev, isTuiRoute));
+  }, [isTuiRoute]);
 
   // `dashboard.show_token_analytics` gates the Analytics nav item.  The
   // page itself remains reachable by URL (it renders an explanation when
@@ -429,39 +438,39 @@ export default function App() {
       .catch(() => setShowTokenAnalytics(false));
   }, []);
 
-  // A plugin can replace the built-in /chat page via `tab.override: "/chat"`
+  // A plugin can replace the built-in /tui page via `tab.override: "/tui"`
   // in its manifest.  When one does, `buildRoutes` already swaps the route
   // element for <PluginPage /> — but we also have to suppress the
-  // persistent ChatPage host below, or the plugin's page and the built-in
+  // persistent TuiPage host below, or the plugin's page and the built-in
   // terminal would paint on top of each other.  The override is niche
-  // (nothing ships overriding /chat today) but it's an advertised
+  // (nothing ships overriding /tui today) but it's an advertised
   // extension point, so preserve the pre-persistence contract: when a
-  // plugin owns /chat, the built-in chat UI is entirely absent.
+  // plugin owns /tui, the built-in chat UI is entirely absent.
   //
   // Waiting on `pluginsLoading` is load-bearing: manifests arrive
   // asynchronously from /api/dashboard/plugins, so on initial render
-  // `chatOverriddenByPlugin` is always false.  Without the loading
+  // `tuiOverriddenByPlugin` is always false.  Without the loading
   // gate, the persistent host would mount, spawn a PTY, and THEN get
   // yanked out from under the user when the plugin's manifest resolves
   // — killing the session mid-paint.  Delaying host mount by the
   // plugin-load window (typically <50ms, worst case 2s safety timeout)
   // is the cheaper trade-off.
-  const chatOverriddenByPlugin = useMemo(
-    () => manifests.some((m) => m.tab.override === "/chat"),
+  const tuiOverriddenByPlugin = useMemo(
+    () => manifests.some((m) => m.tab.override === "/tui"),
     [manifests],
   );
 
   const builtinRoutes = useMemo(
     () => ({
       ...BUILTIN_ROUTES_CORE,
-      ...(embeddedChat ? { "/chat": ChatRouteSink } : {}),
+      ...(embeddedChat ? { "/tui": ChatRouteSink, "/chat": ChatRouteSink } : {}),
     }),
     [embeddedChat],
   );
 
   const builtinNav = useMemo(() => {
     const base = embeddedChat
-      ? [CHAT_NAV_ITEM, ...BUILTIN_NAV_REST]
+      ? [CHAT_NAV_ITEM, TUI_NAV_ITEM, ...BUILTIN_NAV_REST]
       : BUILTIN_NAV_REST;
     return showTokenAnalytics
       ? base
@@ -762,7 +771,7 @@ export default function App() {
               className={cn(
                 "relative z-2 flex min-w-0 min-h-0 flex-1 flex-col",
                 "px-3 sm:px-6",
-                isChatRoute
+                isConversationRoute
                   ? "pb-0 pt-1 sm:pt-2 lg:pt-4"
                   : "pt-2 sm:pt-4 lg:pt-6",
                 isDocsRoute && "min-h-0 flex-1",
@@ -772,9 +781,9 @@ export default function App() {
               <div
                 className={cn(
                   "w-full min-w-0",
-                  !isChatRoute &&
+                  !isConversationRoute &&
                     "pb-[calc(2rem+env(safe-area-inset-bottom,0px))] lg:pb-8",
-                  (isDocsRoute || isChatRoute) &&
+                  (isDocsRoute || isConversationRoute) &&
                     "min-h-0 flex flex-1 flex-col",
                 )}
               >
@@ -794,32 +803,39 @@ export default function App() {
                   </Suspense>
                 </ProfileKeyedRoutes>
 
+                {embeddedChat && !guiOverriddenByPlugin && !pluginsLoading && guiHostMounted && (
+                  <div data-gui-chat-active={isChatRoute ? "true" : "false"} aria-hidden={!isChatRoute} className={cn("min-h-0 min-w-0", isChatRoute ? "flex flex-1 flex-col" : "hidden")}>
+                    <Suspense fallback={isChatRoute ? <RouteFallback label="Loading chat…" /> : null}>
+                      <GuiChatPage key={profile || "__own__"} isActive={isChatRoute} />
+                    </Suspense>
+                  </div>
+                )}
                 {embeddedChat &&
-                  !chatOverriddenByPlugin &&
+                  !tuiOverriddenByPlugin &&
                   (pluginsLoading ? (
-                    isChatRoute ? (
+                    isTuiRoute ? (
                       <RouteFallback label="Loading chat…" />
                     ) : null
-                  ) : chatHostMounted ? (
+                  ) : tuiHostMounted ? (
                     <div
-                      data-chat-active={isChatRoute ? "true" : "false"}
+                      data-chat-active={isTuiRoute ? "true" : "false"}
                       className={cn(
                         "min-h-0 min-w-0",
-                        isChatRoute ? "flex flex-1 flex-col" : "hidden",
+                        isTuiRoute ? "flex flex-1 flex-col" : "hidden",
                       )}
-                      aria-hidden={!isChatRoute}
+                      aria-hidden={!isTuiRoute}
                     >
                       <Suspense
                         fallback={
-                          isChatRoute ? (
+                          isTuiRoute ? (
                             <RouteFallback label="Loading chat…" />
                           ) : null
                         }
                       >
-                        <ChatPage isActive={isChatRoute} />
+                        <TuiPage isActive={isTuiRoute} />
                       </Suspense>
                     </div>
-                  ) : isChatRoute ? (
+                  ) : isTuiRoute ? (
                     <RouteFallback label="Loading chat…" />
                   ) : null)}
               </div>
@@ -841,7 +857,7 @@ export default function App() {
  * fetchJSON ?profile= injection) silently targeted the newly selected
  * profile B — the exact stale-target footgun the switcher exists to kill.
  * Keying by profile resets every page's local state so it refetches under
- * the new scope. The persistent ChatPage host below handles its own
+ * the new scope. The persistent TuiPage host below handles its own
  * remount (channel keyed on scopedProfile).
  */
 function ProfileKeyedRoutes({ children }: { children: ReactNode }) {

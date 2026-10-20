@@ -42,6 +42,8 @@ interface ChatSessionListProps {
   className?: string;
   /** Optional callback fired after a row is picked (e.g. close mobile sheet). */
   onPicked?: () => void;
+  /** Explicit conversation controller adapter; TUI retains URL fallback. */
+  onSelectSession?: (id: string) => void;
   /**
    * Starts a fresh chat. ChatPage supplies its `startFreshDashboardChat`,
    * which clears `?resume` AND bumps the reconnect nonce so a brand-new PTY
@@ -73,6 +75,7 @@ export function ChatSessionList({
   profile,
   className,
   onPicked,
+  onSelectSession,
   onNewChat,
   workspaceCwd,
   onWorkspaceChange,
@@ -145,6 +148,7 @@ export function ChatSessionList({
     (id: string) => {
       onPicked?.();
       if (id === activeSessionId) return;
+      if (onSelectSession) { onSelectSession(id); return; }
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -154,7 +158,7 @@ export function ChatSessionList({
         { replace: false },
       );
     },
-    [activeSessionId, onPicked, setSearchParams],
+    [activeSessionId, onPicked, onSelectSession, setSearchParams],
   );
 
   // "New chat" prefers ChatPage's robust handler (clears resume + forces a

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -95,9 +95,10 @@ class FakeTerminal {
 
 const maybeReloadForLoopbackWsAuthFailure = vi.fn(() => false);
 const apiMocks = vi.hoisted(() => ({
+  getSessionDetail: vi.fn(async () => ({title: null})),
+  getSessionLatestDescendant: vi.fn(async () => ({session_id: null})),
   buildWsUrl: vi.fn(async () => "ws://localhost/api/pty?channel=chat-1"),
-}));
-const uploadChatImage = vi.hoisted(() =>
+}));const uploadChatImage = vi.hoisted(() =>
   vi.fn(async () => ({ path: "/tmp/pasted.png" })),
 );
 
@@ -278,14 +279,27 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-describe("ChatPage", () => {
+describe("TuiPage", () => {
+  it("does not respawn the hidden terminal when GUI resume query parameters change", async () => {
+    const { default: TuiPage } = await import("./TuiPage");
+    let navigate!: ReturnType<typeof useNavigate>;
+    function PersistentTerminal() {
+      navigate = useNavigate();
+      const location = useLocation();
+      return <TuiPage isActive={location.pathname === '/tui'} />;
+    }
+    await render(<MemoryRouter initialEntries={['/tui?resume=terminal-session']}><PersistentTerminal /></MemoryRouter>);
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    await act(async () => navigate('/chat?resume=gui-session'));
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
   it("sends a PTY keepalive frame every 20 seconds while the socket is open", async () => {
     vi.useFakeTimers();
     try {
-      const { default: ChatPage } = await import("./ChatPage");
+      const { default: TuiPage } = await import("./TuiPage");
       await render(
-        <MemoryRouter initialEntries={["/chat"]}>
-          <ChatPage isActive />
+        <MemoryRouter initialEntries={["/tui"]}>
+          <TuiPage isActive />
         </MemoryRouter>,
       );
       await act(async () => {
@@ -309,10 +323,10 @@ describe("ChatPage", () => {
   it("defers a reconnect while the chat tab is inactive", async () => {
     vi.useFakeTimers();
     try {
-      const { default: ChatPage } = await import("./ChatPage");
+      const { default: TuiPage } = await import("./TuiPage");
       await render(
-        <MemoryRouter initialEntries={["/chat"]}>
-          <ChatPage isActive />
+        <MemoryRouter initialEntries={["/tui"]}>
+          <TuiPage isActive />
         </MemoryRouter>,
       );
       await act(async () => {
@@ -322,8 +336,8 @@ describe("ChatPage", () => {
       await act(async () => {
         socket.onclose?.({ code: 1001, reason: "", wasClean: true });
         root.render(
-          <MemoryRouter initialEntries={["/chat"]}>
-            <ChatPage isActive={false} />
+          <MemoryRouter initialEntries={["/tui"]}>
+            <TuiPage isActive={false} />
           </MemoryRouter>,
         );
       });
@@ -343,10 +357,10 @@ describe("ChatPage", () => {
   // default insertion into xterm's hidden textarea, which leaves a stale
   // value there and duplicates the next typed character.
   async function renderChat() {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -412,10 +426,10 @@ describe("ChatPage", () => {
   });
 
   it("reconnects on tab return after a hidden-tab close even when a stale upload banner is showing", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -463,11 +477,11 @@ describe("ChatPage", () => {
   });
 
   it("treats loopback 4401 closes as stale-token reload candidates", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
 
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
 
@@ -483,10 +497,10 @@ describe("ChatPage", () => {
   });
 
   it("offers a Reload button for an expired login when auto-reload is spent", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -500,10 +514,10 @@ describe("ChatPage", () => {
   });
 
   it("renders Start new session after the server could not start the chat (1011)", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -517,10 +531,10 @@ describe("ChatPage", () => {
   });
 
   it("offers Start new session and Open logs when the agent process ended", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -537,10 +551,10 @@ describe("ChatPage", () => {
   it("stops retrying after the ladder is spent and offers Check server status", async () => {
     vi.useFakeTimers();
     try {
-      const { default: ChatPage } = await import("./ChatPage");
+      const { default: TuiPage } = await import("./TuiPage");
       await render(
-        <MemoryRouter initialEntries={["/chat"]}>
-          <ChatPage isActive />
+        <MemoryRouter initialEntries={["/tui"]}>
+          <TuiPage isActive />
         </MemoryRouter>,
       );
       await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -565,11 +579,11 @@ describe("ChatPage", () => {
   });
 
   it("redials after a clean 1012 service-restart close (#95951)", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
 
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
@@ -590,9 +604,9 @@ describe("ChatPage", () => {
   });
 
   it("attaches visualViewport keyboard-inset listeners only while the chat tab is active", async () => {
-    // NS-434 follow-up: ChatPage stays mounted (hidden) on every dashboard
+    // NS-434 follow-up: TuiPage stays mounted (hidden) on every dashboard
     // route. The keyboard-inset/scroll-pin listeners must only be live while
-    // /chat is the active tab, or the scroll pin fires when a soft keyboard
+    // /tui is the active tab, or the scroll pin fires when a soft keyboard
     // opens on Settings etc.
     const addEventListener = vi.fn();
     const removeEventListener = vi.fn();
@@ -601,19 +615,19 @@ describe("ChatPage", () => {
       value: { addEventListener, removeEventListener, width: 1280 },
     });
 
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
 
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive={false} />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive={false} />
       </MemoryRouter>,
     );
     expect(addEventListener).not.toHaveBeenCalled();
 
     await act(async () =>
       root.render(
-        <MemoryRouter initialEntries={["/chat"]}>
-          <ChatPage isActive />
+        <MemoryRouter initialEntries={["/tui"]}>
+          <TuiPage isActive />
         </MemoryRouter>,
       ),
     );
@@ -625,8 +639,8 @@ describe("ChatPage", () => {
 
     await act(async () =>
       root.render(
-        <MemoryRouter initialEntries={["/chat"]}>
-          <ChatPage isActive={false} />
+        <MemoryRouter initialEntries={["/tui"]}>
+          <TuiPage isActive={false} />
         </MemoryRouter>,
       ),
     );
@@ -637,12 +651,12 @@ describe("ChatPage", () => {
   });
 });
 
-describe("ChatPage side panel collapse", () => {
+describe("TuiPage side panel collapse", () => {
   async function renderChat() {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
   }
@@ -690,7 +704,7 @@ describe("ChatPage side panel collapse", () => {
 // (that timer is set after `new WebSocket`). Without its own deadline the tab
 // strands on "connecting" with no retry. Mirrors the ChatSidebar events-feed
 // coverage in src/components/ChatSidebar.test.tsx.
-describe("ChatPage bundled font swap-in", () => {
+describe("TuiPage bundled font swap-in", () => {
   it("redraws the terminal with the bundled font once it finishes loading", async () => {
     let releaseFont!: () => void;
     const fontGate = new Promise<void>((resolve) => {
@@ -708,10 +722,10 @@ describe("ChatPage bundled font swap-in", () => {
     });
     const clearAtlas = vi.spyOn(FakeTerminal.prototype, "clearTextureAtlas");
     try {
-      const { default: ChatPage } = await import("./ChatPage");
+      const { default: TuiPage } = await import("./TuiPage");
       await render(
-        <MemoryRouter initialEntries={["/chat"]}>
-          <ChatPage isActive />
+        <MemoryRouter initialEntries={["/tui"]}>
+          <TuiPage isActive />
         </MemoryRouter>,
       );
       expect(clearAtlas).not.toHaveBeenCalled();
@@ -730,7 +744,7 @@ describe("ChatPage bundled font swap-in", () => {
   });
 });
 
-describe("ChatPage PTY ticket connect deadline", () => {
+describe("TuiPage PTY ticket connect deadline", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -740,10 +754,10 @@ describe("ChatPage PTY ticket connect deadline", () => {
   });
 
   async function renderChat() {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
   }
@@ -815,7 +829,7 @@ describe("ChatPage PTY ticket connect deadline", () => {
 // xterm WebGL renderer gating (#18773 / #45520 / #58685): the addon must only
 // load when the host can actually use it (wide layout, non-Safari, hardware GL)
 // and must be dropped when shaped-script text arrives.
-describe("ChatPage WebGL renderer gating", () => {
+describe("TuiPage WebGL renderer gating", () => {
   const CHROME_UA =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
   const SAFARI_UA =
@@ -846,10 +860,10 @@ describe("ChatPage WebGL renderer gating", () => {
   }
 
   async function renderChat() {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
     await act(async () => {

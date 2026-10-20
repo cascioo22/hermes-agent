@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Behaviour tests for the chat composer's screen-reader accessibility
- * (#36784). Unlike source-text assertions, these render ChatPage and observe
+ * (#36784). Unlike source-text assertions, these render TuiPage and observe
  * what assistive technology would observe:
  *
  *   - the xterm `Terminal` is CONSTRUCTED with `screenReaderMode: true`, the
@@ -267,12 +267,12 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-describe("ChatPage composer screen-reader accessibility (#36784)", () => {
+describe("TuiPage composer screen-reader accessibility (#36784)", () => {
   it("constructs the xterm Terminal with screenReaderMode so AT gets an editable textarea", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
 
@@ -284,10 +284,10 @@ describe("ChatPage composer screen-reader accessibility (#36784)", () => {
   });
 
   it("exposes the terminal host as a labelled region in the accessibility tree", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
 
@@ -299,10 +299,10 @@ describe("ChatPage composer screen-reader accessibility (#36784)", () => {
   });
 
   it("lets Tab escape the terminal from the single registered key handler", async () => {
-    const { default: ChatPage } = await import("./ChatPage");
+    const { default: TuiPage } = await import("./TuiPage");
     await render(
-      <MemoryRouter initialEntries={["/chat"]}>
-        <ChatPage isActive />
+      <MemoryRouter initialEntries={["/tui"]}>
+        <TuiPage isActive />
       </MemoryRouter>,
     );
 
